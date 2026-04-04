@@ -1,6 +1,7 @@
 from android_mcp.tree.views import TreeState, ElementNode, CenterCord, BoundingBox
 from android_mcp.tree.utils import extract_cordinates,get_center_cordinates
 from android_mcp.tree.config import INTERACTIVE_CLASSES
+from android_mcp.perf_log import timed
 from PIL import Image, ImageFont, ImageDraw
 from xml.etree.ElementTree import Element
 from xml.etree import ElementTree
@@ -20,7 +21,8 @@ class Tree:
 
     def get_element_tree(self, xml_data=None)->'Element':
         tree_string = xml_data if xml_data else self.mobile.device.dump_hierarchy()
-        return ElementTree.fromstring(tree_string)
+        with timed("get_element_tree.fromstring"):
+            return ElementTree.fromstring(tree_string)
     
     def get_state(self, xml_data=None)->TreeState:
         interactive_elements=self.get_interactive_elements(xml_data=xml_data)
@@ -29,23 +31,25 @@ class Tree:
     def get_interactive_elements(self, xml_data=None)->list:
         interactive_elements=[]
         element_tree = self.get_element_tree(xml_data=xml_data)
-        nodes=element_tree.findall('.//node[@enabled="true"]')
-        for node in nodes:
-            if self.is_interactive(node):
-                x1,y1,x2,y2 = extract_cordinates(node)
-                name=self.get_element_name(node)
-                if not name:
-                    continue
-                x_center,y_center = get_center_cordinates((x1,y1,x2,y2))
-                raw_id=node.get('resource-id','')
-                short_id=raw_id.split('/')[-1] if '/' in raw_id else raw_id
-                interactive_elements.append(ElementNode(**{
-                    'name':name,
-                    'class_name':node.get('class'),
-                    'coordinates':CenterCord(x=x_center,y=y_center),
-                    'bounding_box':BoundingBox(x1=x1,y1=y1,x2=x2,y2=y2),
-                    'resource_id':short_id
-                }))
+        with timed("get_interactive_elements.findall"):
+            nodes=element_tree.findall('.//node[@enabled="true"]')
+        with timed("get_interactive_elements.filter_loop"):
+            for node in nodes:
+                if self.is_interactive(node):
+                    x1,y1,x2,y2 = extract_cordinates(node)
+                    name=self.get_element_name(node)
+                    if not name:
+                        continue
+                    x_center,y_center = get_center_cordinates((x1,y1,x2,y2))
+                    raw_id=node.get('resource-id','')
+                    short_id=raw_id.split('/')[-1] if '/' in raw_id else raw_id
+                    interactive_elements.append(ElementNode(**{
+                        'name':name,
+                        'class_name':node.get('class'),
+                        'coordinates':CenterCord(x=x_center,y=y_center),
+                        'bounding_box':BoundingBox(x1=x1,y1=y1,x2=x2,y2=y2),
+                        'resource_id':short_id
+                    }))
         return interactive_elements
 
     def get_element_name(self, node) -> str:
@@ -95,7 +99,8 @@ class Tree:
 
     def annotated_screenshot(self, nodes: list[ElementNode],scale:float=0.7, screenshot=None) -> Image.Image:
         if screenshot is None:
-            screenshot = self.mobile.get_screenshot(scale=scale)
+            with timed("annotated_screenshot.get_screenshot"):
+                screenshot = self.mobile.get_screenshot(scale=scale)
 
         draw = ImageDraw.Draw(screenshot)
         font_size = 12
@@ -135,7 +140,8 @@ class Tree:
             draw.rectangle([(label_x1, label_y1), (label_x2, label_y2)], fill=color)
             draw.text((label_x1 + 2, label_y1 + 2), str(label), fill=(255, 255, 255), font=font)
 
-        for i, node in enumerate(nodes):
-            draw_annotation(i, node)
+        with timed("annotated_screenshot.draw_all"):
+            for i, node in enumerate(nodes):
+                draw_annotation(i, node)
 
         return screenshot

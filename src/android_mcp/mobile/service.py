@@ -1,5 +1,6 @@
 from android_mcp.mobile.views import MobileState
 from android_mcp.tree.service import Tree
+from android_mcp.perf_log import timed, log_separator
 import uiautomator2 as u2
 from io import BytesIO
 from PIL import Image
@@ -95,14 +96,15 @@ class Mobile:
 
         def get_xml():
             try:
-                data['xml'] = self.device.dump_hierarchy()
+                with timed("capture_data.dump_hierarchy"):
+                    data['xml'] = self.device.dump_hierarchy()
             except Exception as e:
                 data['xml_error'] = e
 
         def get_img():
             try:
-                # Use format="pillow" to ensure we get a PIL image immediately
-                data['img'] = self.device.screenshot(format="pillow")
+                with timed("capture_data.screenshot"):
+                    data['img'] = self.device.screenshot(format="pillow")
             except Exception as e:
                 data['img_error'] = e
 
@@ -112,8 +114,9 @@ class Mobile:
 
         for t in threads:
             t.start()
-        for t in threads:
-            t.join()
+        with timed("capture_data.total_parallel"):
+            for t in threads:
+                t.join()
 
         if 'xml_error' in data:
             raise data['xml_error']
@@ -124,23 +127,29 @@ class Mobile:
 
     def get_state(self, use_vision=False, as_bytes: bool = False, as_base64: bool = False, use_annotation: bool = True):
         try:
-            xml_data, screenshot_data = self.capture_data(use_vision=use_vision)
-            tree = Tree(self)
-            tree_state = tree.get_state(xml_data=xml_data)
+            log_separator(f"get_state use_vision={use_vision}")
+            with timed("get_state.capture_data"):
+                xml_data, screenshot_data = self.capture_data(use_vision=use_vision)
+            with timed("get_state.tree_state"):
+                tree = Tree(self)
+                tree_state = tree.get_state(xml_data=xml_data)
 
             if use_vision:
                 nodes = tree_state.interactive_elements
                 scale = float(os.getenv("SCREENSHOT_SCALE", "0.5"))
                 w, h = screenshot_data.size
-                screenshot_data = screenshot_data.resize(
-                    (int(w * scale), int(h * scale)), Image.Resampling.LANCZOS
-                )
+                with timed("get_state.screenshot_resize"):
+                    screenshot_data = screenshot_data.resize(
+                        (int(w * scale), int(h * scale)), Image.Resampling.LANCZOS
+                    )
                 if use_annotation:
-                    screenshot = tree.annotated_screenshot(nodes=nodes, scale=scale, screenshot=screenshot_data)
+                    with timed("get_state.annotated_screenshot"):
+                        screenshot = tree.annotated_screenshot(nodes=nodes, scale=scale, screenshot=screenshot_data)
                 else:
                     screenshot = screenshot_data
                 if os.getenv("SCREENSHOT_QUANTIZED") in ["1", "yes", "true", True]:
-                    screenshot = self.quantized_screenshot(screenshot)
+                    with timed("get_state.quantize"):
+                        screenshot = self.quantized_screenshot(screenshot)
 
                 if as_base64:
                     screenshot = self.as_base64(screenshot)
@@ -177,7 +186,8 @@ class Mobile:
             if screenshot is None:
                 raise ValueError("Screenshot is None")
             io=BytesIO()
-            screenshot.save(io,format='PNG',compress_level=1)
+            with timed("screenshot_in_bytes.png_save"):
+                screenshot.save(io,format='PNG',compress_level=1)
             bytes=io.getvalue()
             if len(bytes) == 0:
                 raise ValueError("Screenshot conversion resulted in empty bytes.")
@@ -190,7 +200,8 @@ class Mobile:
             if screenshot is None:
                 raise ValueError("Screenshot is None")
             io=BytesIO()
-            screenshot.save(io,format='PNG',compress_level=1)
+            with timed("as_base64.png_save"):
+                screenshot.save(io,format='PNG',compress_level=1)
             bytes=io.getvalue()
             if len(bytes) == 0:
                 raise ValueError("Screenshot conversion resulted in empty bytes.")
