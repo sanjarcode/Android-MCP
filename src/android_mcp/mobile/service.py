@@ -4,6 +4,7 @@ import uiautomator2 as u2
 from io import BytesIO
 from PIL import Image
 import subprocess
+import threading
 import base64
 import os
 from typing import Optional
@@ -90,7 +91,6 @@ class Mobile:
         return self.device
 
     def capture_data(self, use_vision: bool = True):
-        import threading
         data = {}
 
         def get_xml():
@@ -130,8 +130,13 @@ class Mobile:
 
             if use_vision:
                 nodes = tree_state.interactive_elements
+                scale = float(os.getenv("SCREENSHOT_SCALE", "0.5"))
+                w, h = screenshot_data.size
+                screenshot_data = screenshot_data.resize(
+                    (int(w * scale), int(h * scale)), Image.Resampling.LANCZOS
+                )
                 if use_annotation:
-                    screenshot = tree.annotated_screenshot(nodes=nodes, scale=1.0, screenshot=screenshot_data)
+                    screenshot = tree.annotated_screenshot(nodes=nodes, scale=scale, screenshot=screenshot_data)
                 else:
                     screenshot = screenshot_data
                 if os.getenv("SCREENSHOT_QUANTIZED") in ["1", "yes", "true", True]:
@@ -172,7 +177,7 @@ class Mobile:
             if screenshot is None:
                 raise ValueError("Screenshot is None")
             io=BytesIO()
-            screenshot.save(io,format='PNG')
+            screenshot.save(io,format='PNG',compress_level=1)
             bytes=io.getvalue()
             if len(bytes) == 0:
                 raise ValueError("Screenshot conversion resulted in empty bytes.")
@@ -185,7 +190,7 @@ class Mobile:
             if screenshot is None:
                 raise ValueError("Screenshot is None")
             io=BytesIO()
-            screenshot.save(io,format='PNG')
+            screenshot.save(io,format='PNG',compress_level=1)
             bytes=io.getvalue()
             if len(bytes) == 0:
                 raise ValueError("Screenshot conversion resulted in empty bytes.")
