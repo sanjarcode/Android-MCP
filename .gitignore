@@ -10,8 +10,6 @@ wheels/
 .venv
 *.mcpb
 notebook.ipynb
-<<<<<<< HEAD
-
 # Performance log files (branch-name.log)
 *.log
 .vscode
