@@ -10,3 +10,4 @@ wheels/
 .venv
 *.mcpb
 notebook.ipynb
+.vscode
