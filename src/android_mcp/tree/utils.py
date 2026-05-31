@@ -1,9 +1,11 @@
 import re
 
+_BOUNDS_RE = re.compile(r'\[(\d+),(\d+)]\[(\d+),(\d+)]')
+
 def extract_cordinates(node):
     attributes = node.attrib
     bounds=attributes.get('bounds')
-    match = re.search(r'\[(\d+),(\d+)]\[(\d+),(\d+)]', bounds)
+    match = _BOUNDS_RE.search(bounds)
     if match:
         x1, y1, x2, y2 = map(int, match.groups())
         return x1, y1, x2, y2
